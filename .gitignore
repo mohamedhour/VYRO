@@ -14,6 +14,7 @@ dist-ssr
 .env
 .env.*
 !.env.example
+.dev.vars
 data/promo-hour-claims.json*
 data/customer-accounts.json*
 .codex/

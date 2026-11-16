@@ -1,0 +1,6 @@
+NODE_ENV=production
+CLOUDFLARE_WORKER=true
+VYRO_IS_HTTPS=true
+VYRO_DEBUG=false
+VYRO_SESSION_SECRET=replace-with-at-least-32-random-characters
+GEMINI_API_KEY=optional-gemini-key

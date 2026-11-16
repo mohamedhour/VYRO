@@ -1,164 +1,32 @@
--- ============================================================================
--- VYRO — seed data
--- Mirrors the product catalog already used by the frontend's mock data
--- (src/lib/products.js) so the two stay in sync during integration.
--- ============================================================================
-
+-- VYRO storefront catalog. Keep IDs, names, prices, categories, variants, and
+-- image paths aligned with src/data/catalog.ts. Initial stock is zero because
+-- saleable quantities must be supplied by the store owner before launch.
 SET NAMES utf8mb4;
 
 INSERT INTO categories (name, slug) VALUES
-    ('T-Shirts',    't-shirts'),
-    ('Hoodies',     'hoodies'),
-    ('Jackets',     'jackets'),
-    ('Pants',       'pants'),
-    ('Shoes',       'shoes'),
-    ('Accessories', 'accessories')
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+    ('Hoodies', 'hoodies'),
+    ('Outerwear', 'outerwear'),
+    ('Bottoms', 'bottoms'),
+    ('Footwear', 'footwear'),
+    ('Accessories', 'accessories'),
+    ('Tees', 'tees')
+ON DUPLICATE KEY UPDATE slug = VALUES(slug);
 
 INSERT INTO products
     (id, category_id, name, description, materials, price_value, image_url, sizes, colors, stock, rating, review_count, is_new)
 VALUES
-(
-    'nova-overcoat',
-    (SELECT id FROM categories WHERE slug = 'jackets'),
-    'Nova Overcoat',
-    'A full-length wool-blend overcoat cut for a clean, structured silhouette. Built for cold commutes and layering over tailoring.',
-    '72% wool, 25% polyester, 3% elastane. Fully lined.',
-    6200, '/images/products/nova-overcoat.jpg',
-    JSON_ARRAY('S','M','L','XL'),
-    JSON_ARRAY(JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Charcoal','hex','#2e2e31')),
-    8, 4.8, 96, 1
-),
-(
-    'axis-blazer',
-    (SELECT id FROM categories WHERE slug = 'jackets'),
-    'Axis Blazer',
-    'Single-breasted blazer in a soft-structured wool blend. Slim through the body with a natural shoulder line.',
-    '68% wool, 30% polyester, 2% elastane. Half-canvassed construction.',
-    4850, '/images/products/axis-blazer.jpg',
-    JSON_ARRAY('S','M','L','XL'),
-    JSON_ARRAY(JSON_OBJECT('name','Navy','hex','#1f2b42'), JSON_OBJECT('name','Black','hex','#141416')),
-    5, 4.6, 142, 1
-),
-(
-    'field-jacket',
-    (SELECT id FROM categories WHERE slug = 'jackets'),
-    'Field Jacket',
-    'Cotton-canvas field jacket with a four-pocket front and a matte corozo button placket. Built to weather.',
-    '100% cotton canvas, brushed cotton lining.',
-    3600, '/images/products/field-jacket.jpg',
-    JSON_ARRAY('S','M','L','XL','XXL'),
-    JSON_ARRAY(JSON_OBJECT('name','Olive','hex','#4a5230'), JSON_OBJECT('name','Black','hex','#141416')),
-    0, 4.3, 58, 0
-),
-(
-    'strata-shirt',
-    (SELECT id FROM categories WHERE slug = 't-shirts'),
-    'Strata Shirt',
-    'A structured cotton-poplin shirt with a clean point collar. Cut close through the waist without pulling at the shoulders.',
-    '100% cotton poplin.',
-    950, '/images/products/strata-shirt.jpg',
-    JSON_ARRAY('S','M','L','XL'),
-    JSON_ARRAY(JSON_OBJECT('name','White','hex','#ededec'), JSON_OBJECT('name','Black','hex','#141416')),
-    14, 4.4, 87, 0
-),
-(
-    'core-tee',
-    (SELECT id FROM categories WHERE slug = 't-shirts'),
-    'Core Tee',
-    'Heavyweight cotton tee with a boxier fit and reinforced collar seam. The everyday layer under everything else.',
-    '100% combed cotton, 220gsm jersey.',
-    480, '/images/products/core-tee.jpg',
-    JSON_ARRAY('S','M','L','XL'),
-    JSON_ARRAY(JSON_OBJECT('name','White','hex','#ededec'), JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Grey','hex','#7d7d80')),
-    20, 4.5, 211, 1
-),
-(
-    'form-trouser',
-    (SELECT id FROM categories WHERE slug = 'pants'),
-    'Form Trouser',
-    'Tapered wool-blend trouser with a mid-rise waist and a clean front. Tailored enough for the office, relaxed enough without it.',
-    '70% wool, 28% polyester, 2% elastane.',
-    1650, '/images/products/form-trouser.jpg',
-    JSON_ARRAY('28','30','32','34','36'),
-    JSON_ARRAY(JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Sand','hex','#c9b895')),
-    10, 4.4, 73, 1
-),
-(
-    'utility-cargo',
-    (SELECT id FROM categories WHERE slug = 'pants'),
-    'Utility Cargo',
-    'Straight-leg cargo pant in brushed cotton twill, with articulated knees and a hidden interior pocket.',
-    '100% cotton twill.',
-    1450, '/images/products/utility-cargo.jpg',
-    JSON_ARRAY('28','30','32','34'),
-    JSON_ARRAY(JSON_OBJECT('name','Olive','hex','#4a5230'), JSON_OBJECT('name','Black','hex','#141416')),
-    6, 4.1, 39, 0
-),
-(
-    'mono-knit',
-    (SELECT id FROM categories WHERE slug = 'hoodies'),
-    'Mono Knit',
-    'Fine-gauge merino knit with a ribbed hem and cuff. Layers cleanly under the Axis Blazer or worn alone.',
-    '100% merino wool.',
-    1380, '/images/products/mono-knit.jpg',
-    JSON_ARRAY('S','M','L','XL'),
-    JSON_ARRAY(JSON_OBJECT('name','Grey','hex','#7d7d80'), JSON_OBJECT('name','Navy','hex','#1f2b42')),
-    0, 4.0, 24, 0
-),
-(
-    'drift-hoodie',
-    (SELECT id FROM categories WHERE slug = 'hoodies'),
-    'Drift Hoodie',
-    'Heavyweight brushed-fleece hoodie with a dropped shoulder and a fixed drawcord hood. Off-duty, not sloppy.',
-    '80% cotton, 20% polyester brushed fleece, 420gsm.',
-    1150, '/images/products/drift-hoodie.jpg',
-    JSON_ARRAY('S','M','L','XL','XXL'),
-    JSON_ARRAY(JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Grey','hex','#7d7d80'), JSON_OBJECT('name','Sand','hex','#c9b895')),
-    15, 4.7, 168, 1
-),
-(
-    'vector-runner',
-    (SELECT id FROM categories WHERE slug = 'shoes'),
-    'Vector Runner',
-    'Minimal low-top trainer in a smooth leather upper with a lightweight rubber sole. Built to go with everything above it.',
-    'Leather upper, rubber outsole, cushioned foam midsole.',
-    2450, '/images/products/vector-runner.jpg',
-    JSON_ARRAY('40','41','42','43','44','45'),
-    JSON_ARRAY(JSON_OBJECT('name','White','hex','#ededec'), JSON_OBJECT('name','Black','hex','#141416')),
-    9, 4.6, 104, 0
-),
-(
-    'trail-sneaker',
-    (SELECT id FROM categories WHERE slug = 'shoes'),
-    'Trail Sneaker',
-    'Rugged low-top with a lugged outsole and abrasion-resistant panels, without tipping into full hiking-boot territory.',
-    'Textile and synthetic upper, rubber lugged outsole.',
-    2150, '/images/products/trail-sneaker.jpg',
-    JSON_ARRAY('40','41','42','43','44'),
-    JSON_ARRAY(JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Grey','hex','#7d7d80')),
-    4, 4.2, 31, 1
-),
-(
-    'transit-bag',
-    (SELECT id FROM categories WHERE slug = 'accessories'),
-    'Transit Bag',
-    'Structured leather tote with a padded laptop sleeve and a magnetic top closure. Fits a full day without bulking up.',
-    'Full-grain leather, cotton-twill lining.',
-    2900, '/images/products/transit-bag.jpg',
-    JSON_ARRAY('One Size'),
-    JSON_ARRAY(JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Sand','hex','#c9b895')),
-    12, 4.9, 65, 0
-),
-(
-    'signal-cap',
-    (SELECT id FROM categories WHERE slug = 'accessories'),
-    'Signal Cap',
-    'Six-panel cap in washed cotton twill with a curved brim and an adjustable strap. The finishing piece on a low-key look.',
-    '100% cotton twill, adjustable strap.',
-    380, '/images/products/signal-cap.jpg',
-    JSON_ARRAY('One Size'),
-    JSON_ARRAY(JSON_OBJECT('name','Black','hex','#141416'), JSON_OBJECT('name','Navy','hex','#1f2b42'), JSON_OBJECT('name','Olive','hex','#4a5230')),
-    25, 4.3, 47, 1
-)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+('vyro-cyber-hoodie', (SELECT id FROM categories WHERE slug='hoodies'), 'VYRO 480gsm Boxy Oversized Hoodie', 'Heavyweight 480gsm washed-black French terry hoodie with dropped shoulders, boxy cropped drape, and metallic VYRO chest crest.', '100% Heavyweight Combed Cotton (480gsm)', 690, '/assets/products/vyro_oversized_hoodie.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Washed Obsidian','hex','#181A20'),JSON_OBJECT('name','Crimson Ash','hex','#E11D48')), 0, 0, 0, 1),
+('vyro-cargo-pant', (SELECT id FROM categories WHERE slug='bottoms'), 'Parachute Tactical Wide Cargo Pants', 'Relaxed wide-leg parachute cargo trousers in charcoal ripstop nylon with articulated knees, crimson utility straps, and toggle cuffs.', '94% Ripstop Technical Nylon, 6% Elastane', 640, '/assets/products/vyro_tech_cargo.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Charcoal Ripstop','hex','#1C1E24'),JSON_OBJECT('name','Stealth Black','hex','#0F1117')), 0, 0, 0, 0),
+('vyro-aero-bomber', (SELECT id FROM categories WHERE slug='outerwear'), 'Cropped Boxy Flight Bomber Jacket', 'Architectural cropped-waist oversized flight bomber in matte-black twill with quilted crimson thermal lining and MA-1 sleeve pocket.', '100% Water-Repellent Matte Flight Twill', 1190, '/assets/products/vyro_bomber_jacket.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Matte Black / Crimson','hex','#14161D'),JSON_OBJECT('name','Deep Slate','hex','#27272A')), 0, 0, 0, 1),
+('vyro-velocity-high', (SELECT id FROM categories WHERE slug='footwear'), 'Apex Chunky Runner Sneakers', 'Sculpted oversized runner silhouette with multi-layered mesh and leather upper, chunky EVA lugged sole, and crimson heel cage.', 'Full-Grain Nubuck, Ballistic Mesh & Dual-Density EVA', 980, '/assets/products/vyro_chunky_sneakers.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Obsidian / Chalk / Crimson','hex','#E11D48'),JSON_OBJECT('name','Triple Black','hex','#18181B')), 0, 0, 0, 1),
+('vyro-oversized-tee', (SELECT id FROM categories WHERE slug='tees'), 'Acid-Wash Drop-Shoulder Heavy Tee', 'Boxy oversized 300gsm vintage acid-wash charcoal tee with wide rib collar and futuristic crimson chest typography.', '100% Organic Carded Cotton (300gsm)', 390, '/assets/products/vyro_oversized_tee.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Acid Charcoal','hex','#27272A'),JSON_OBJECT('name','Jet Black','hex','#111318')), 0, 0, 0, 0),
+('vyro-full-kit', (SELECT id FROM categories WHERE slug='hoodies'), 'VYRO Complete Oversized 4-Piece Fit', 'Full contemporary street uniform: 480gsm Boxy Hoodie, Parachute Wide Cargo Pants, Apex Chunky Sneakers, and Crossbody Tech Bag.', '480gsm French Terry & Ripstop Technical Nylon', 2190, '/assets/products/vyro_full_oversized_fit.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Signature Obsidian / Crimson','hex','#E11D48')), 0, 0, 0, 1),
+('vyro-hero-campaign-fit', (SELECT id FROM categories WHERE slug='hoodies'), 'VYRO Hero Campaign Full Outfit', 'The signature VYRO FASHION hero look: Reflective VYRO Hoodie, Tactical Cargo Pants, Crimson/Chalk High-Tops, and Stealth V-Cap.', 'Heavyweight Tech-Fleece, Ripstop Twill & Full-Grain Leather', 1890, '/assets/products/vyro_campaign_full_outfit.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Campaign Black / Crimson','hex','#E11D48'),JSON_OBJECT('name','Obsidian Edition','hex','#141720')), 0, 0, 0, 1),
+('vyro-campaign-hoodie-solo', (SELECT id FROM categories WHERE slug='hoodies'), 'VYRO Signature Reflective Hoodie', 'The exact oversized black hoodie from the VYRO campaign featuring bold white VYRO chest typography, contrast red stitching, and sleeve utility pocket.', '100% Heavyweight Tech-Fleece Cotton (460gsm)', 740, '/assets/products/vyro_campaign_hoodie_solo.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Obsidian / White','hex','#141720'),JSON_OBJECT('name','Crimson Stitch','hex','#E11D48')), 0, 0, 0, 1),
+('vyro-campaign-pants-solo', (SELECT id FROM categories WHERE slug='bottoms'), 'VYRO Tactical Campaign Cargo Pants', 'The signature black tactical cargo trousers from the VYRO campaign with gusseted thigh pockets, white VYRO branding, and tapered ankle cuffs.', '96% Combed Ripstop Cotton, 4% Elastane', 690, '/assets/products/vyro_campaign_pants_solo.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Obsidian Black','hex','#12141A'),JSON_OBJECT('name','Graphite','hex','#27272A')), 0, 0, 0, 1),
+('vyro-campaign-sneakers-solo', (SELECT id FROM categories WHERE slug='footwear'), 'VYRO V-Crest High-Top Sneakers', 'The signature black, chalk-white, and crimson high-top sneakers from the VYRO campaign with bold V-emblem tongue and cushioned court sole.', 'Full-Grain Leather & Breathable Technical Mesh', 990, '/assets/products/vyro_campaign_sneakers_solo.jpg', JSON_ARRAY('S','M','L','XL','XXL'), JSON_ARRAY(JSON_OBJECT('name','Obsidian / Chalk / Crimson','hex','#E11D48'),JSON_OBJECT('name','Stealth Black','hex','#18181B')), 0, 0, 0, 1),
+('vyro-campaign-cap-solo', (SELECT id FROM categories WHERE slug='accessories'), 'VYRO Stealth V-Emblem Cap', 'Structured 6-panel black cap from the VYRO campaign featuring a 3D metallic-white V-insignia and micro-adjustable rear strap.', '100% Brushed Technical Twill', 290, '/assets/products/vyro_campaign_cap_solo.jpg', JSON_ARRAY('One Size'), JSON_ARRAY(JSON_OBJECT('name','Obsidian Black','hex','#111318'),JSON_OBJECT('name','Crimson Edition','hex','#E11D48')), 0, 0, 0, 1)
+ON DUPLICATE KEY UPDATE
+    category_id=VALUES(category_id), name=VALUES(name), description=VALUES(description), materials=VALUES(materials),
+    price_value=VALUES(price_value), image_url=VALUES(image_url), sizes=VALUES(sizes), colors=VALUES(colors),
+    rating=VALUES(rating), review_count=VALUES(review_count), is_new=VALUES(is_new);

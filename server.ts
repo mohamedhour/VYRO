@@ -7,6 +7,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { GoogleGenAI } from '@google/genai'
 
 const app = express()
+if (process.env.CLOUDFLARE_WORKER === 'true') app.set('trust proxy', 1)
 const port = Number(process.env.PORT || process.env.CHAT_PORT || 3001)
 const productsApiBase = (process.env.DATABASE_API_URL || (process.env.NODE_ENV === 'production' ? `http://127.0.0.1:${port}` : process.env.VITE_API_BASE_URL || 'http://localhost:8000')).replace(/\/+$/, '')
 const modelName = 'gemini-3.8-flash'
@@ -20,6 +21,14 @@ const welcomeDiscountOrders = 5
 const welcomeDiscountPercent = 20
 let promoClaimQueue: Promise<unknown> = Promise.resolve()
 let customerStoreQueue: Promise<unknown> = Promise.resolve()
+
+// Workers do not have durable local disk. Use the shared MySQL-compatible
+// database for this small storefront account/promotion state in that runtime.
+function cloudStatePool() {
+  const pool = (globalThis as typeof globalThis & { __VYRO_DB_POOL?: any }).__VYRO_DB_POOL
+  if (!pool) throw new Error('Durable customer state database is unavailable.')
+  return pool
+}
 
 type CustomerAccount = {
   id: string
@@ -35,6 +44,27 @@ type CustomerStore = {
   orders: Record<string, { email: string; orderNumber: string; createdAt: number; subtotalMad: number; discountMad: number; totalMad: number }>
 }
 type CustomerProfile = { fullName: string; email: string; discountPercent: number; discountedOrdersRemaining: number }
+class CheckoutError extends Error {}
+
+async function withCloudState<T, R>(key: string, initial: T, operation: (state: T, connection: any) => Promise<R> | R, save: boolean): Promise<R> {
+  const connection = await cloudStatePool().getConnection()
+  try {
+    await connection.beginTransaction()
+    await connection.execute('INSERT IGNORE INTO app_state (state_key, state_value) VALUES (?, ?)', [key, JSON.stringify(initial)])
+    const [rows] = await connection.execute('SELECT state_value FROM app_state WHERE state_key=? FOR UPDATE', [key]) as any
+    const raw = rows[0]?.state_value
+    const state = (typeof raw === 'string' ? JSON.parse(raw) : raw) as T
+    const result = await operation(state, connection)
+    if (save) await connection.execute('UPDATE app_state SET state_value=? WHERE state_key=?', [JSON.stringify(state), key])
+    await connection.commit()
+    return result
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
 
 function derivePassword(password: string, salt: string) {
   return new Promise<Buffer>((resolve, reject) => {
@@ -60,7 +90,10 @@ async function loadCustomerStore(): Promise<CustomerStore> {
   }
 }
 
-function withCustomerStore<T>(operation: (store: CustomerStore) => Promise<T> | T, save = false): Promise<T> {
+function withCustomerStore<T>(operation: (store: CustomerStore, connection?: any) => Promise<T> | T, save = false): Promise<T> {
+  if (process.env.CLOUDFLARE_WORKER === 'true') {
+    return withCloudState('customer-store', { accounts: {}, sessions: {}, orders: {} } satisfies CustomerStore, operation, save)
+  }
   const queued = customerStoreQueue.then(async () => {
     const store = await loadCustomerStore()
     const result = await operation(store)
@@ -280,39 +313,103 @@ app.post('/api/auth/logout', async (request: Request, response: Response) => {
 })
 
 app.post('/api/orders/confirm', async (request: Request, response: Response) => {
-  const subtotalMad = Number(request.body?.subtotalMad)
-  const deliveryFeeMad = Number(request.body?.deliveryFeeMad)
-  if (!Number.isFinite(subtotalMad) || subtotalMad <= 0 || !Number.isFinite(deliveryFeeMad) || deliveryFeeMad < 0) {
-    response.status(400).json({ error: 'The order total is invalid.' })
+  const input = request.body ?? {}
+  const fullName = toText(input.fullName).trim()
+  const phone = toText(input.phone).trim()
+  const city = toText(input.city).trim()
+  const address = toText(input.address).trim()
+  const promoCode = toText(input.promoCode).toUpperCase()
+  const items = Array.isArray(input.items) ? input.items : []
+  if (fullName.length < 2 || !phone || !city || !address || !items.length || items.length > 30) {
+    response.status(422).json({ error: 'Enter your delivery details and add at least one valid item.' })
+    return
+  }
+  if (!/^\+?[0-9][0-9 ()-]{7,20}$/.test(phone)) {
+    response.status(422).json({ error: 'Enter a valid phone number.' })
     return
   }
   try {
-    const order = await withCustomerStore((store) => {
-      const account = authenticatedAccount(request, store)
-      if (!account) return null
-      const remainingBefore = Math.max(0, welcomeDiscountOrders - account.discountedOrdersUsed)
-      const discountMad = remainingBefore ? Math.round(subtotalMad * welcomeDiscountPercent / 100) : 0
-      const totalMad = Math.max(0, subtotalMad - discountMad) + deliveryFeeMad
-      const orderNumber = `VY-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`
-      account.discountedOrdersUsed += 1
-      store.orders[orderNumber] = {
-        email: account.email,
-        orderNumber,
-        createdAt: Date.now(),
-        subtotalMad,
-        discountMad,
-        totalMad,
-      }
-      return { orderNumber, subtotalMad, discountMad, totalMad, profile: customerProfile(account) }
-    }, true)
-    if (!order) {
-      response.status(401).json({ error: 'Sign in to use your account order benefit.' })
+    if (process.env.CLOUDFLARE_WORKER !== 'true') {
+      const subtotalMad = Number(input.subtotalMad)
+      const deliveryFeeMad = Number(input.deliveryFeeMad || 0)
+      const fallback = await withCustomerStore((store) => {
+        const account = authenticatedAccount(request, store)
+        const discountMad = account && account.discountedOrdersUsed < welcomeDiscountOrders
+          ? Math.round(subtotalMad * welcomeDiscountPercent / 100) : 0
+        if (account && discountMad) account.discountedOrdersUsed += 1
+        const totalMad = Math.max(0, subtotalMad - discountMad) + deliveryFeeMad
+        const orderNumber = `VY-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`
+        if (account) store.orders[orderNumber] = { email: account.email, orderNumber, createdAt: Date.now(), subtotalMad, discountMad, totalMad }
+        return { orderNumber, subtotalMad, discountMad, promoDiscountMad: 0, totalMad, profile: account ? customerProfile(account) : null }
+      }, Boolean(request.headers.authorization))
+      response.json(fallback)
       return
     }
+
+    const promoCustomerId = toText(input.promoCustomerId)
+    let hourPromoReserved = false
+    if (promoCode === 'HOUR' && /^[\w-]{16,80}$/.test(promoCustomerId)) {
+      hourPromoReserved = await withCloudState('hour-promo-claims', { customerIds: [] as string[] }, state => state.customerIds.includes(promoCustomerId), false)
+    }
+
+    const order = await withCustomerStore(async (store, connection) => {
+      const account = authenticatedAccount(request, store)
+      const required = new Map<string, number>()
+      for (const item of items) {
+        const productId = toText(item?.productId)
+        const quantity = Number(item?.quantity)
+        if (!productId || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) throw new CheckoutError('Each item needs a valid product and quantity.')
+        required.set(productId, (required.get(productId) || 0) + quantity)
+      }
+      const products = new Map<string, any>()
+      for (const [productId, quantity] of required) {
+        const [rows] = await connection.execute('SELECT id,name,price_value,stock FROM products WHERE id=? FOR UPDATE', [productId])
+        if (!rows[0]) throw new CheckoutError(`The product "${productId}" is no longer available.`)
+        if (Number(rows[0].stock) < quantity) throw new CheckoutError(`"${rows[0].name}" does not have enough stock available.`)
+        products.set(productId, rows[0])
+      }
+      let subtotalMad = 0
+      const lines = items.map((item: any) => {
+        const product = products.get(toText(item.productId))
+        const quantity = Number(item.quantity)
+        const unitPrice = Number(product.price_value)
+        subtotalMad += unitPrice * quantity
+        return { item, product, quantity, unitPrice }
+      })
+      const welcomeDiscountMad = account && account.discountedOrdersUsed < welcomeDiscountOrders
+        ? Math.round(subtotalMad * welcomeDiscountPercent / 100) : 0
+      let promoDiscountMad = 0
+      if (!welcomeDiscountMad) {
+        if (promoCode === 'VYRO10') promoDiscountMad = Math.round(subtotalMad * 0.1)
+        else if (promoCode === 'VYRO15' && subtotalMad > 1500) promoDiscountMad = Math.round(subtotalMad * 0.15)
+        else if (promoCode === 'HOUR' && hourPromoReserved) promoDiscountMad = Math.round(subtotalMad * 0.1)
+        else if (promoCode) throw new CheckoutError('This promotion is no longer valid.')
+      }
+      const discountMad = welcomeDiscountMad + promoDiscountMad
+      const totalMad = Math.max(0, subtotalMad - discountMad)
+      const orderNumber = `VYRO-${randomBytes(5).toString('hex').toUpperCase()}`
+      const email = account?.email || (typeof input.email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email) ? input.email : null)
+      const [insert] = await connection.execute(
+        'INSERT INTO orders(order_number,user_id,full_name,email,phone,address,city,postal_code,payment_method,subtotal,shipping,total) VALUES(?,NULL,?,?,?,?,?,NULL,?,?,?,?)',
+        [orderNumber, fullName, email, phone, address, city, 'cod', subtotalMad, 0, totalMad],
+      )
+      for (const line of lines) {
+        await connection.execute('INSERT INTO order_items(order_id,product_id,product_name,size,color,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)',
+          [insert.insertId, line.product.id, line.product.name, line.item.size || null, line.item.colorName || line.item.color || null, line.quantity, line.unitPrice, line.quantity * line.unitPrice])
+        await connection.execute('UPDATE products SET stock=stock-? WHERE id=?', [line.quantity, line.product.id])
+      }
+      if (account && welcomeDiscountMad) account.discountedOrdersUsed += 1
+      if (account) store.orders[orderNumber] = { email: account.email, orderNumber, createdAt: Date.now(), subtotalMad, discountMad, totalMad }
+      return { orderNumber, subtotalMad, discountMad, promoDiscountMad, totalMad, profile: account ? customerProfile(account) : null }
+    }, true)
     response.json(order)
   } catch (error) {
+    if (error instanceof CheckoutError) {
+      response.status(422).json({ error: error.message })
+      return
+    }
     console.error('Could not confirm VYRO account order:', error)
-    response.status(500).json({ error: 'Could not confirm the order right now. Please try again.' })
+    response.status(500).json({ error: 'Could not save the order right now. Please try again.' })
   }
 })
 
@@ -410,6 +507,15 @@ app.post('/api/promotions/validate', async (request: Request, response: Response
   }
 
   const claim = promoClaimQueue.then(async () => {
+    if (process.env.CLOUDFLARE_WORKER === 'true') {
+      const state = await withCloudState('hour-promo-claims', { customerIds: [] as string[] }, (value) => {
+        if (value.customerIds.includes(customerId)) return { allowed: true, remaining: Math.max(0, hourPromoLimit - value.customerIds.length) }
+        if (value.customerIds.length >= hourPromoLimit) return { allowed: false, remaining: 0 }
+        value.customerIds.push(customerId)
+        return { allowed: true, remaining: hourPromoLimit - value.customerIds.length }
+      }, true)
+      return state
+    }
     let customerIds: string[] = []
     try {
       const saved = JSON.parse(await readFile(hourPromoFile, 'utf8')) as { customerIds?: unknown }
@@ -516,7 +622,7 @@ app.post('/api/chat', async (request: Request, response: Response) => {
   }
 })
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && process.env.CLOUDFLARE_WORKER !== 'true') {
   const distDirectory = path.resolve(process.cwd(), 'dist')
   const require = createRequire(import.meta.url)
   const legacyApi = require('./backend/server.js')
@@ -527,8 +633,18 @@ if (process.env.NODE_ENV === 'production') {
     response.sendFile(path.join(distDirectory, 'index.html'), error => error && next(error))
   })
   app.use(legacyApi)
+} else if (process.env.CLOUDFLARE_WORKER === 'true') {
+  // Cloudflare serves the Vite build through its Assets binding. Keep the
+  // Express API mounted here so browser and API share one public origin.
+  const require = createRequire(import.meta.url)
+  const legacyApi = require('./backend/server.js')
+  app.use(legacyApi)
 }
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`VYRO ${process.env.NODE_ENV === 'production' ? 'site and API' : 'stylist API'} listening on port ${port}`)
-})
+if (process.env.CLOUDFLARE_WORKER !== 'true') {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`VYRO ${process.env.NODE_ENV === 'production' ? 'site and API' : 'stylist API'} listening on port ${port}`)
+  })
+}
+
+export default app

@@ -73,13 +73,13 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS orders (
     id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     order_number   VARCHAR(40)     NOT NULL,
-    user_id        INT UNSIGNED    NOT NULL,
+    user_id        INT UNSIGNED    NULL,
     full_name      VARCHAR(150)    NOT NULL,
-    email          VARCHAR(190)    NOT NULL,
+    email          VARCHAR(190)    NULL,
     phone          VARCHAR(30)     NOT NULL,
     address        VARCHAR(255)    NOT NULL,
     city           VARCHAR(100)    NOT NULL,
-    postal_code    VARCHAR(20)     NOT NULL,
+    postal_code    VARCHAR(20)     NULL,
     payment_method ENUM('cod','card') NOT NULL,
     subtotal       INT UNSIGNED    NOT NULL,
     shipping       INT UNSIGNED    NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS orders (
     KEY idx_orders_user (user_id),
     CONSTRAINT fk_orders_user
         FOREIGN KEY (user_id) REFERENCES users(id)
-        ON DELETE CASCADE ON UPDATE CASCADE
+        ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------

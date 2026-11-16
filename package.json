@@ -10,7 +10,9 @@
     "start:chat": "tsx server.ts",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cloudflare:dev": "npm run build && npx --yes wrangler@4 dev",
+    "cloudflare:deploy": "npm run build && npx --yes wrangler@4 deploy"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",

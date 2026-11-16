@@ -6,7 +6,7 @@ VYRO is a React/Vite storefront with an Express API for customer accounts, order
 
 The storefront preview is deployed to GitHub Pages at <https://mohamedhour.github.io/vyro-fashion/>. It uses the sample catalog bundled with the frontend. Accounts, checkout, order tracking, the AI stylist, and the Node APIs are not connected in this static preview.
 
-The `.github/workflows/pages.yml` workflow builds the site and publishes it whenever `main` changes. The Vite base path is set for this GitHub Pages project URL.
+The `.github/workflows/pages.yml` workflow publishes a static preview. Accounts, checkout, order tracking, AI features, and Node APIs need the full-stack deployment below.
 
 ## Run locally
 
@@ -15,19 +15,34 @@ The `.github/workflows/pages.yml` workflow builds the site and publishes it when
 3. Start MySQL and load `backend/database/schema.sql`, `seed.sql`, and `migrations/002_admin_dashboard.sql` in order.
 4. Start the frontend and stylist API with `npm run dev`. Vite serves the site on port 5173; the MySQL API runs separately with `npm start --prefix backend` on port 8000.
 
-## Optional full-stack deployment
+## Full-stack deployment on Cloudflare
 
-`render.yaml` describes a Render Node service for the frontend and API. It requires a public MySQL-compatible cloud database; a local XAMPP database cannot be reached from a public server. The setup notes use TiDB Cloud Starter as one MySQL-compatible option. Import `backend/database/schema.sql`, `seed.sql`, and `migrations/002_admin_dashboard.sql`, then provide the database connection details in the Render environment. Never put real credentials in this repository.
+The full site is configured as one Cloudflare Worker with static assets and Express APIs. It uses a remote MySQL-compatible database (TiDB Cloud Starter is an option); a local XAMPP database cannot be reached from a public server. Customer state, uploaded product images, and private try-on photos are stored durably in that database.
 
-The full-stack demo stores some account and promotion state in local JSON files, so those records do not persist reliably across service restarts. Use a durable database-backed implementation before accepting real customer orders.
+1. Create a TiDB Cloud Starter cluster and a database. Import `backend/database/schema.sql`, `backend/database/seed.sql`, `backend/database/migrations/002_admin_dashboard.sql`, `backend/database/migrations/003_cloud_state.sql`, and `backend/database/migrations/004_guest_checkout.sql` in that order.
+   The catalog seed sets inventory to zero on purpose. Create your admin account using `backend/scripts/create-admin.js` with your TiDB connection values in a private local `backend/.env`, then set each product's real stock in the Admin dashboard before taking orders.
+2. Create a Cloudflare account and run `npx wrangler@4 login` from this repository. In the Cloudflare dashboard, create a Hyperdrive configuration for the TiDB MySQL endpoint and set its binding name to `HYPERDRIVE`. Copy its ID into `wrangler.jsonc` at `hyperdrive[0].id`. Hyperdrive keeps the database credentials in Cloudflare and provides the secure connection used by mysql2.
+3. Set the application secrets in Cloudflare (never commit these values):
+
+   ```powershell
+   npx wrangler secret put VYRO_SESSION_SECRET
+   npx wrangler secret put GEMINI_API_KEY
+   ```
+
+   `GEMINI_API_KEY` is optional for the AI stylist; product browsing, accounts, and ordering use the database.
+   To deploy automatically from GitHub, save `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository Actions secrets, and set the repository variable `CLOUDFLARE_DEPLOY_ENABLED=true`. Until then, deployment can be started manually with the Wrangler command below.
+4. Deploy with `npm run cloudflare:deploy`. Wrangler prints the public `workers.dev` URL. The Worker serves the frontend, API, and uploaded images from one origin.
+
+For local Worker development, copy `.dev.vars.example` to `.dev.vars`, fill in a session secret and optional Gemini key, apply the migrations above, then run `npm run cloudflare:dev`. `.dev.vars` is ignored by Git.
 
 ## Project layout
 
 - `src/` — storefront UI and API clients
 - `public/assets/` — storefront images and icons
-- `server.ts` — Express app for the stylist and customer demo APIs; in production it serves `dist/` and mounts `backend/server.js`
+- `server.ts` — Express app for the stylist and customer APIs; production mounts `backend/server.js`
 - `backend/server.js` — Express + MySQL API
 - `backend/database/` — schema, seed data, and admin migration
+- `worker.ts` / `wrangler.jsonc` — full-stack Cloudflare Worker and static asset configuration
 - `.github/workflows/pages.yml` — GitHub Pages static preview deployment
 - `render.yaml` — optional Render deployment blueprint
 - `archive/` — inactive legacy site; excluded from the public repository

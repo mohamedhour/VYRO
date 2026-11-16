@@ -1,6 +1,6 @@
 const PROMO_CUSTOMER_ID_KEY = 'vyro_promo_customer_id';
 
-function getPromoCustomerId(): string {
+export function getPromoCustomerId(): string {
   try {
     const existing = localStorage.getItem(PROMO_CUSTOMER_ID_KEY);
     if (existing) return existing;

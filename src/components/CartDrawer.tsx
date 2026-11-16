@@ -16,7 +16,7 @@ import { SafeImage } from './SafeImage';
 import { useLocale } from '../context/LocaleContext';
 import { TrackedOrder } from '../lib/orderTracking';
 import { openWhatsAppOrder, whatsAppOrderUrl } from '../lib/whatsapp';
-import { reserveHourPromo } from '../lib/promo';
+import { getPromoCustomerId, reserveHourPromo } from '../lib/promo';
 import { confirmAccountOrder, CustomerSession } from '../lib/customerAuth';
 
 export interface CartItem {
@@ -116,19 +116,27 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setConfirmingOrder(true);
     setOrderError('');
     try {
-      let newOrderNumber: string;
-      let finalDiscount = 0;
-      let finalTotal = total;
-      if (customerSession) {
-        const confirmed = await confirmAccountOrder({ subtotalMad: subtotal, deliveryFeeMad: deliveryFee }, customerSession.token);
-        newOrderNumber = confirmed.orderNumber;
-        finalDiscount = confirmed.discountMad;
-        finalTotal = confirmed.totalMad;
-        onCustomerSessionChange({ ...customerSession, profile: confirmed.profile });
-      } else {
-        const randomNum = Math.floor(1000 + Math.random() * 9000);
-        newOrderNumber = `VY-${randomNum}`;
-      }
+      const confirmed = await confirmAccountOrder({
+        subtotalMad: subtotal,
+        deliveryFeeMad: deliveryFee,
+        fullName,
+        email: customerSession?.profile.email,
+        phone,
+        city,
+        address,
+        promoCode,
+        promoCustomerId: promoCode === 'HOUR' ? getPromoCustomerId() : undefined,
+        items: items.map((item) => ({
+          productId: item.product.id,
+          size: String(item.size),
+          colorName: item.colorName,
+          quantity: item.quantity,
+        })),
+      }, customerSession?.token);
+      const newOrderNumber = confirmed.orderNumber;
+      const finalDiscount = confirmed.discountMad + confirmed.promoDiscountMad;
+      const finalTotal = confirmed.totalMad;
+      if (customerSession && confirmed.profile) onCustomerSessionChange({ ...customerSession, profile: confirmed.profile });
       setOrderDiscountMad(finalDiscount);
       setOrderTotalMad(finalTotal);
       setOrderNumber(newOrderNumber);

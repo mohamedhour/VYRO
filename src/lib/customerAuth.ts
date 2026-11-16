@@ -63,12 +63,24 @@ export function logoutCustomer(session: CustomerSession) {
   return apiRequest<{ success: boolean }>('/api/auth/logout', {}, session.token)
 }
 
-export function confirmAccountOrder(input: { subtotalMad: number; deliveryFeeMad: number }, token: string) {
+export function confirmAccountOrder(input: {
+  subtotalMad: number
+  deliveryFeeMad: number
+  fullName: string
+  email?: string
+  phone: string
+  city: string
+  address: string
+  promoCode?: string
+  promoCustomerId?: string
+  items: Array<{ productId: string; size: string; colorName: string; quantity: number }>
+}, token?: string) {
   return apiRequest<{
     orderNumber: string
     subtotalMad: number
     discountMad: number
+    promoDiscountMad: number
     totalMad: number
-    profile: CustomerProfile
+    profile: CustomerProfile | null
   }>('/api/orders/confirm', input, token)
 }
