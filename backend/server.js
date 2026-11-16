@@ -8,6 +8,7 @@ const mysql = require('mysql2/promise');
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+let connectTidb;
 let bcrypt;
 try { bcrypt = require('bcryptjs'); } catch { bcrypt = null; }
 
@@ -19,17 +20,49 @@ const allowedOrigins = (process.env.VYRO_ALLOWED_ORIGINS || 'http://localhost:51
 const secureCookie = /^(1|true|yes)$/i.test(process.env.VYRO_IS_HTTPS || 'false');
 const debug = /^(1|true|yes)$/i.test(process.env.VYRO_DEBUG || 'false');
 let activePool;
+function edgeDatabaseClient() {
+  const config = globalThis.__VYRO_TIDB_CONFIG;
+  if (!config?.host || !config?.username || !config?.password || !config?.database) {
+    throw new Error('TiDB Cloud database settings are missing.');
+  }
+  if (!connectTidb) ({ connect: connectTidb } = require('@tidbcloud/serverless'));
+  const connection = connectTidb({ ...config, fullResult: true });
+  let transaction;
+  async function run(sql, values) {
+    const result = await (transaction || connection).execute(sql, values, { fullResult: true });
+    return [result.rows || [], {
+      affectedRows: Number(result.rowsAffected || 0),
+      insertId: Number(result.lastInsertId || 0),
+    }];
+  }
+  return {
+    execute: run,
+    query: run,
+    async beginTransaction() { transaction = await connection.begin(); },
+    async commit() {
+      if (!transaction) return;
+      const current = transaction;
+      try { await current.commit(); } finally { transaction = undefined; }
+    },
+    async rollback() {
+      if (!transaction) return;
+      const current = transaction;
+      try { await current.rollback(); } finally { transaction = undefined; }
+    },
+    release() {},
+  };
+}
 function getPool() {
   if (activePool) return activePool;
-  const hyperdrive = globalThis.__VYRO_HYPERDRIVE;
   if (process.env.CLOUDFLARE_WORKER === 'true') {
-    if (!hyperdrive) throw new Error('Cloudflare Hyperdrive binding is missing.');
-    activePool = mysql.createPool({
-      host: hyperdrive.host, port: hyperdrive.port, database: hyperdrive.database,
-      user: hyperdrive.user, password: hyperdrive.password,
-      charset: 'utf8mb4', waitForConnections: true, connectionLimit: 4,
-      queueLimit: 0, decimalNumbers: true, disableEval: true,
-    });
+    if (!globalThis.__VYRO_TIDB_CONFIG) throw new Error('TiDB Cloud database settings are missing.');
+    // TiDB's HTTP serverless driver works in Workers and avoids the MySQL
+    // AuthSwitchRequest handshake that Hyperdrive currently rejects for TiDB.
+    activePool = {
+      execute: (...args) => edgeDatabaseClient().execute(...args),
+      query: (...args) => edgeDatabaseClient().query(...args),
+      getConnection: async () => edgeDatabaseClient(),
+    };
   } else {
     activePool = mysql.createPool({
       host: process.env.VYRO_DB_HOST || '127.0.0.1',

@@ -9,12 +9,20 @@ const expressHandler = httpServerHandler({ port })
 
 interface Bindings {
   ASSETS: { fetch(request: Request): Promise<Response> }
-  HYPERDRIVE: { host: string; port: number; database: string; user: string; password: string }
+  TIDB_HOST: string
+  TIDB_DATABASE: string
+  TIDB_USERNAME: string
+  TIDB_PASSWORD: string
 }
 
 export default {
   async fetch(request: Request, env: Bindings): Promise<Response> {
-    ;(globalThis as typeof globalThis & { __VYRO_HYPERDRIVE?: Bindings['HYPERDRIVE'] }).__VYRO_HYPERDRIVE = env.HYPERDRIVE
+    ;(globalThis as typeof globalThis & { __VYRO_TIDB_CONFIG?: Record<string, string> }).__VYRO_TIDB_CONFIG = {
+      host: env.TIDB_HOST,
+      database: env.TIDB_DATABASE,
+      username: env.TIDB_USERNAME,
+      password: env.TIDB_PASSWORD,
+    }
     const pathname = new URL(request.url).pathname
     if (pathname === '/health' || pathname.startsWith('/api/') || pathname.startsWith('/uploads/')) {
       return expressHandler.fetch(request, env)
