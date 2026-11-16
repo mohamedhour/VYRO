@@ -35,8 +35,11 @@ export function App() {
 }
 
 function StorefrontApp() {
+  const staticDemo = import.meta.env.VITE_STATIC_DEMO === 'true';
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
-  const [apiNotice, setApiNotice] = useState('');
+  const [apiNotice, setApiNotice] = useState(
+    staticDemo ? 'Public preview mode: products are sample data; accounts, checkout, orders, AI stylist, and the Node API are not connected.' : ''
+  );
   const [selectedCategory, setSelectedCategory] =
     useState<ProductCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,6 +77,7 @@ function StorefrontApp() {
   };
 
   useEffect(() => {
+    if (staticDemo) return;
     let cancelled = false;
     const apiBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/+$/, '');
 
@@ -101,7 +105,7 @@ function StorefrontApp() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [staticDemo]);
 
   const categoryOptions = useMemo(
     () => ['All', ...new Set(products.map((product) => product.category).filter(Boolean))],
@@ -301,7 +305,7 @@ function StorefrontApp() {
         />
       )}
 
-      {!isFitStudioOpen && !isCartOpen && !selectedProduct && <StylistChat />}
+      {!staticDemo && !isFitStudioOpen && !isCartOpen && !selectedProduct && <StylistChat />}
 
       {/* Slide-Over Cart & Morocco Checkout Drawer */}
       <CartDrawer
