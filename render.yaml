@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: vyro-site
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm ci --prefix backend && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VYRO_DB_HOST
+        sync: false
+      - key: VYRO_DB_PORT
+        value: "4000"
+      - key: VYRO_DB_NAME
+        sync: false
+      - key: VYRO_DB_USER
+        sync: false
+      - key: VYRO_DB_PASS
+        sync: false
+      - key: VYRO_DB_SSL
+        value: "true"
+      - key: VYRO_SESSION_SECRET
+        generateValue: true
+      - key: VYRO_IS_HTTPS
+        value: "true"
+      - key: VYRO_DEBUG
+        value: "false"

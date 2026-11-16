@@ -1,0 +1,6 @@
+.env
+node_modules/
+private/tryon-photos/*
+public/uploads/products/*
+!public/uploads/products/.htaccess
+npm-debug.log*

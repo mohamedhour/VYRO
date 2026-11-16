@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------- */
+/* VYRO Design Tokens                                                     */
+/* ---------------------------------------------------------------------- */
+
+@theme {
+  /* Color system */
+  --color-vyro-black: #0a0a0b;      /* main background */
+  --color-vyro-panel: #141416;      /* secondary background */
+  --color-vyro-line: #232326;       /* hairlines / borders */
+  --color-vyro-white: #ededec;      /* primary text */
+  --color-vyro-mute: #8b8b90;       /* secondary text */
+  --color-vyro-accent: #9fe8ff;     /* ice blue */
+  --color-vyro-accent-dim: #5b7d85; /* accent at rest / on dark */
+
+  /* Type */
+  --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+
+  /* Layout */
+  --breakpoint-xs: 420px;
+}
+
+:root {
+  --font-product: 'Syne', system-ui, -apple-system, sans-serif;
+  --font-cyber: 'Unbounded', system-ui, -apple-system, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 36s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+body {
+  background-color: var(--color-vyro-black);
+  color: var(--color-vyro-white);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.vyro-fit-flow {
+  --color-vyro-black: #06070b;
+  --color-vyro-panel: #0b0e16;
+  --color-vyro-line: rgba(255, 255, 255, 0.1);
+  --color-vyro-white: #f4f4f5;
+  --color-vyro-mute: #a1a1aa;
+  --color-vyro-accent: #f43f5e;
+  --color-vyro-accent-dim: #be123c;
+}
+
+
+::selection {
+  background: var(--color-vyro-accent);
+  color: var(--color-vyro-black);
+}
+
+/* Slim, quiet scrollbar — fits a premium/tech feel without dominating */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-vyro-black);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-vyro-line);
+  border-radius: 0;
+}
+
+/* Visible, deliberate focus ring instead of the browser default */
+:focus-visible {
+  outline: 1px solid var(--color-vyro-accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Utility layer: small set of repeated editorial patterns */
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-product {
+    font-family: var(--font-product);
+  }
+  .font-cyber {
+    font-family: var(--font-cyber);
+    font-variant-numeric: tabular-nums;
+  }
+  .font-body {
+    font-family: var(--font-body);
+  }
+  .font-mono-tabular {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .hairline {
+    border-color: var(--color-vyro-line);
+  }
+  .grain {
+    position: relative;
+  }
+}
