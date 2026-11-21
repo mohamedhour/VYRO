@@ -1,49 +1,123 @@
+<div align="center">
+
 # VYRO Fashion
 
-VYRO is a React/Vite storefront with an Express API for customer accounts, orders, promotions, try-on, and the AI stylist. The Node/MySQL catalog and admin API lives in `backend/`.
+### Modern streetwear. A smoother way to shop.
 
-## Open the store
+Browse the collection, choose your size, and place an order online.
 
-**Live full-stack store:** <https://vyro-fashion.hoursimo69.workers.dev>
+<a href="https://vyro-fashion.hoursimo69.workers.dev"><strong>Visit the live store →</strong></a>
 
-The store, API, and database run on Cloudflare and TiDB, so customers can browse and place orders even when the development computer is off.
+</div>
+
+---
+
+## About
+
+VYRO is a full-stack fashion storefront built for a fast, polished shopping experience. The live store serves its catalog and APIs from Cloudflare Workers, with TiDB Cloud providing persistent product, customer, and order data.
+
+## Store features
+
+- Product catalog with category browsing, search, colors, and size selection
+- Cart and cash-on-delivery checkout
+- Per-size stock availability, including clear sold-out states
+- Customer accounts, order tracking, saved products, and promotions
+- AI fashion stylist and virtual try-on features
+- Responsive storefront for desktop and mobile
+
+## Technology
+
+| Area | Tools |
+| --- | --- |
+| Storefront | React, Vite, TypeScript, Tailwind CSS |
+| API | Node.js, Express |
+| Database | TiDB Cloud, MySQL-compatible |
+| Hosting | Cloudflare Workers and Workers Assets |
+| AI features | Google Gemini API (optional) |
 
 ## Run locally
 
-1. Install frontend/API dependencies: `npm install`, then `npm install --prefix backend`.
-2. Copy `.env.example` to `.env` and set `GEMINI_API_KEY` if you want the AI stylist. The MySQL API uses `backend/.env`; copy `backend/.env.example` there and fill in the local database settings.
-3. Start MySQL and load `backend/database/schema.sql`, `seed.sql`, and `migrations/002_admin_dashboard.sql` in order.
-4. Start the frontend and stylist API with `npm run dev`. Vite serves the site on port 5173; the MySQL API runs separately with `npm start --prefix backend` on port 8000.
+### Requirements
 
-## Full-stack deployment on Cloudflare
+- Node.js 22 or later
+- MySQL or MariaDB for the local API
 
-The full site is configured as one Cloudflare Worker with static assets and Express APIs. It uses a remote MySQL-compatible database (TiDB Cloud Starter is an option); a local XAMPP database cannot be reached from a public server. Customer state, uploaded product images, and private try-on photos are stored durably in that database.
+### Setup
 
-1. Create a TiDB Cloud Starter cluster and a database. Import `backend/database/schema.sql`, `backend/database/seed.sql`, `backend/database/migrations/002_admin_dashboard.sql`, `backend/database/migrations/003_cloud_state.sql`, and `backend/database/migrations/004_guest_checkout.sql` in that order.
-   The catalog seed sets inventory to zero on purpose. Create your admin account using `backend/scripts/create-admin.js` with your TiDB connection values in a private local `backend/.env`, then set each product's real stock in the Admin dashboard before taking orders.
-2. Create a Cloudflare account and run `npx wrangler@4 login` from this repository. The Worker uses TiDB Cloud's Serverless Driver over HTTPS, which is supported in Cloudflare Workers and avoids the MySQL authentication handshake incompatibility seen with Hyperdrive.
-3. Set the application secrets in Cloudflare (never commit these values):
+```powershell
+git clone https://github.com/mohamedhour/VYRO.git
+cd VYRO
+npm install
+npm install --prefix backend
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+```
+
+Add your local API and database values to the private `.env` files. The example files contain placeholders only. Never commit real passwords or API keys.
+
+Create a local database, then run these SQL files in order:
+
+1. `backend/database/schema.sql`
+2. `backend/database/seed.sql`
+3. `backend/database/migrations/002_admin_dashboard.sql`
+4. `backend/database/migrations/003_cloud_state.sql`
+5. `backend/database/migrations/004_guest_checkout.sql`
+
+The initial catalog has zero stock. Set the real quantities by size before accepting orders. The optional `20261121_stock_by_size.sql` migration is for an existing database that does not yet have the per-size stock column; its sample quantities should be replaced with actual inventory.
+
+### Start the app
+
+Open two PowerShell terminals from the project folder:
+
+```powershell
+npm start --prefix backend
+```
+
+```powershell
+npm run dev
+```
+
+Vite serves the storefront at `http://localhost:5173`; the local product API uses port `8000`.
+
+## Deploy to Cloudflare
+
+The live store is one Worker that serves the storefront and API. It connects to a remote TiDB Cloud database; a local XAMPP database cannot be reached by the public Worker.
+
+1. Configure the TiDB cluster and apply the database schema and migrations.
+2. Log in to Cloudflare from the project folder:
 
    ```powershell
-   npx wrangler secret put VYRO_SESSION_SECRET
-   npx wrangler secret put TIDB_PASSWORD
-   npx wrangler secret put GEMINI_API_KEY
+   npx wrangler@4 login
    ```
 
-   `GEMINI_API_KEY` is optional for the AI stylist; product browsing, accounts, and ordering use the database.
-   To deploy automatically from GitHub, save `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository Actions secrets, and set the repository variable `CLOUDFLARE_DEPLOY_ENABLED=true`. Until then, deployment can be started manually with the Wrangler command below.
-4. Deploy with `npm run cloudflare:deploy`. Wrangler prints the public `workers.dev` URL. The Worker serves the frontend, API, and uploaded images from one origin.
+3. Add the required secrets. Wrangler prompts for each value; keep secret values private:
 
-For local Worker development, copy `.dev.vars.example` to `.dev.vars`, fill in the database credentials, a session secret, and optional Gemini key, apply the migrations above, then run `npm run cloudflare:dev`. `.dev.vars` is ignored by Git.
+   ```powershell
+   npx wrangler@4 secret put VYRO_SESSION_SECRET
+   npx wrangler@4 secret put TIDB_PASSWORD
+   ```
 
-## Project layout
+   `GEMINI_API_KEY` is optional and only needed for Gemini-powered features.
 
-- `src/` — storefront UI and API clients
-- `public/assets/` — storefront images and icons
-- `server.ts` — Express app for the stylist and customer APIs; production mounts `backend/server.js`
-- `backend/server.js` — Express + MySQL API
-- `backend/database/` — schema, seed data, and admin migration
-- `worker.ts` / `wrangler.jsonc` — full-stack Cloudflare Worker and static asset configuration
-- `.github/workflows/pages.yml` — GitHub Pages static preview deployment
-- `render.yaml` — optional Render deployment blueprint
-- `archive/` — inactive legacy site; excluded from the public repository
+4. Build and deploy:
+
+   ```powershell
+   npm run cloudflare:deploy
+   ```
+
+To deploy automatically from GitHub Actions, configure `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets, then set the `CLOUDFLARE_DEPLOY_ENABLED` repository variable to `true`.
+
+## Project structure
+
+```text
+src/                 Storefront UI and API clients
+backend/             Node.js product, account, and order API
+backend/database/    Database schema, seed data, and migrations
+server.ts            Customer, stylist, promotion, and try-on API
+worker.ts            Cloudflare Worker entry point
+wrangler.jsonc       Cloudflare Worker and asset configuration
+```
+
+## Security
+
+Keep `.env`, `backend/.env`, `.dev.vars`, database passwords, session secrets, and API keys out of Git. Use Cloudflare secrets for production credentials.
