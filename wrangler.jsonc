@@ -7,9 +7,6 @@
     "nodejs_compat",
     "nodejs_compat_populate_process_env"
   ],
-  "limits": {
-    "cpu_ms": 50
-  },
   "vars": {
     "NODE_ENV": "production",
     "CLOUDFLARE_WORKER": "true",
