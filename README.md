@@ -8,10 +8,6 @@ VYRO is a React/Vite storefront with an Express API for customer accounts, order
 
 The store, API, and database run on Cloudflare and TiDB, so customers can browse and place orders even when the development computer is off.
 
-**GitHub Pages preview:** <https://mohamedhour.github.io/VYRO/>
-
-The Pages link is a static demo using the sample catalog; checkout, accounts, tracking, the AI stylist, and database-backed APIs work on the full-stack store link above.
-
 ## Run locally
 
 1. Install frontend/API dependencies: `npm install`, then `npm install --prefix backend`.
