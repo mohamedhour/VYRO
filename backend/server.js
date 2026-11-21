@@ -84,8 +84,9 @@ const pool = new Proxy({}, {
   },
 });
 globalThis.__VYRO_DB_POOL = pool;
-const privatePhotos = path.join(__dirname, 'private', 'tryon-photos');
-const productPhotos = path.join(__dirname, 'public', 'uploads', 'products');
+const localDataRoot = process.env.CLOUDFLARE_WORKER === 'true' ? '/tmp/vyro' : __dirname;
+const privatePhotos = path.join(localDataRoot, 'private', 'tryon-photos');
+const productPhotos = path.join(localDataRoot, 'public', 'uploads', 'products');
 const statuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 class RequestValidationError extends Error {}
 
@@ -251,7 +252,7 @@ async function saveImage(dataUrl, directory, maxBytes, scope='products'){const m
 async function removeImage(directory,filename,scope='products'){if(process.env.CLOUDFLARE_WORKER==='true')return pool.execute('DELETE FROM app_uploads WHERE object_key=?',[`${scope}/${filename}`]);return fs.unlink(path.join(directory,filename));}
 function sniffImage(b){if(b.length<12)return null;if(b[0]===0xff&&b[1]===0xd8&&b[2]===0xff)return'image/jpeg';if(b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return'image/png';if(b.toString('ascii',0,4)==='RIFF'&&b.toString('ascii',8,12)==='WEBP')return'image/webp';return null;}
 app.get('/uploads/products/:filename',async(req,res,next)=>{if(process.env.CLOUDFLARE_WORKER!=='true')return next();const filename=path.basename(req.params.filename);if(!/^[a-f0-9]{32}\.(jpg|png|webp)$/.test(filename))return fail(res,'Image not found.',404);const[images]=await pool.execute('SELECT content_type,content FROM app_uploads WHERE object_key=?',[`products/${filename}`]);if(!images[0])return fail(res,'Image not found.',404);res.set({'Content-Type':images[0].content_type,'X-Content-Type-Options':'nosniff','Cache-Control':'public, max-age=31536000, immutable'});return res.send(Buffer.from(images[0].content));});
-app.use('/uploads/products',express.static(productPhotos,{fallthrough:false, dotfiles:'deny', setHeaders(res){res.setHeader('X-Content-Type-Options','nosniff');}}));
+if(process.env.CLOUDFLARE_WORKER!=='true')app.use('/uploads/products',express.static(productPhotos,{fallthrough:false, dotfiles:'deny', setHeaders(res){res.setHeader('X-Content-Type-Options','nosniff');}}));
 app.use((req,res)=>fail(res,'Not found.',404));
 app.use((err,req,res,_next)=>{console.error('[VYRO API]',err);if(res.headersSent)return;const status=err instanceof SyntaxError&&'body'in err?400:(Number(err.statusCode||err.status)>=400?Number(err.statusCode||err.status):500);return fail(res,status===400?'Request body must be valid JSON.':(debug?err.message:'Something went wrong. Please try again.'),status);});
 if (require.main === module) app.listen(port, '0.0.0.0',()=>console.log(`VYRO Node API listening on port ${port}`));
