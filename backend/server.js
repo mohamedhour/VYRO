@@ -25,7 +25,10 @@ function edgeDatabaseClient() {
   if (!config?.host || !config?.username || !config?.password || !config?.database) {
     throw new Error('TiDB Cloud database settings are missing.');
   }
-  if (!connectTidb) ({ connect: connectTidb } = require('@tidbcloud/serverless'));
+  if (!connectTidb) {
+    connectTidb = globalThis.__VYRO_TIDB_CONNECT;
+    if (!connectTidb) ({ connect: connectTidb } = require('@tidbcloud/serverless'));
+  }
   const connection = connectTidb({ ...config, fullResult: true });
   let transaction;
   async function run(sql, values) {

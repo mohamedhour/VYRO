@@ -1,7 +1,10 @@
 import { httpServerHandler } from 'cloudflare:node'
+import { connect as connectTidb } from '@tidbcloud/serverless'
 import app from './server'
 
 const port = 8787
+
+;(globalThis as typeof globalThis & { __VYRO_TIDB_CONNECT?: typeof connectTidb }).__VYRO_TIDB_CONNECT = connectTidb
 
 // Cloudflare adapts the Express listener to the Workers fetch API.
 app.listen(port)
