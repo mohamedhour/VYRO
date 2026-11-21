@@ -11,6 +11,7 @@ import {
   ProductCategory,
 } from './data/catalog';
 import { productFromApi } from './lib/dbProducts';
+import { API_BASE } from './lib/apiBase';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { CatalogSection } from './components/CatalogSection';
@@ -79,9 +80,7 @@ function StorefrontApp() {
   useEffect(() => {
     if (staticDemo) return;
     let cancelled = false;
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/+$/, '');
-
-    fetch(`${apiBase}/api/products/list.php`, {
+    fetch(`${API_BASE}/api/products/list.php`, {
       headers: { Accept: 'application/json' },
     })
       .then((response) => {

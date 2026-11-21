@@ -268,7 +268,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                             {product.sizes.map((size) => {
                               const sizeStock = product.stockBySize?.[size] ?? product.stock;
                               const unavailable = sizeStock === 0;
-                              return <button key={size} type="button" disabled={unavailable} onClick={() => setSelectedSizeByProduct((current) => ({ ...current, [product.id]: size }))} aria-pressed={selectedSize === size} className={`rounded-md border px-2 py-1 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${selectedSize === size ? 'border-rose-500/60 bg-rose-600/15 text-rose-200' : 'border-white/10 text-zinc-400 hover:border-white/30 hover:text-white'}`}>{size}</button>;
+                              return <button key={size} type="button" onClick={() => setSelectedSizeByProduct((current) => ({ ...current, [product.id]: size }))} aria-pressed={selectedSize === size} aria-label={`${size}${unavailable ? ' — Sold out' : ''}`} title={unavailable ? 'Sold out' : undefined} className={`rounded-md border px-2 py-1 text-[10px] font-semibold transition-colors ${unavailable ? 'text-zinc-500 line-through opacity-60' : ''} ${selectedSize === size ? 'border-rose-500/60 bg-rose-600/15 text-rose-200' : 'border-white/10 text-zinc-400 hover:border-white/30 hover:text-white'}`}>{size}</button>;
                             })}
                           </div>
                         </div>
@@ -288,12 +288,14 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                           {product.name}
                         </button>
                       </h3>
-                      {hasScarcityBadge && (
+                      {cardStock === 0 ? (
+                        <p className="mt-1.5 text-[11px] font-medium text-rose-300" aria-live="polite">Sold out in {selectedSize}</p>
+                      ) : hasScarcityBadge && cardStock > 0 && cardStock <= 3 ? (
                         <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-400" aria-live="polite">
                           <Flame className="h-3.5 w-3.5" aria-hidden="true" />
-                          Low Stock: Only 3 left in {selectedSize}
+                          Low stock: only {cardStock} left in {selectedSize}
                         </p>
-                      )}
+                      ) : null}
                     </div>
 
                     <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">

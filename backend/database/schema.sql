@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS products (
     sizes         JSON            NULL COMMENT 'e.g. ["S","M","L","XL"]',
     colors        JSON            NULL COMMENT 'e.g. [{"name":"Black","hex":"#141416"}]',
     stock         INT UNSIGNED    NOT NULL DEFAULT 0,
+    stock_by_size JSON            NULL COMMENT 'e.g. {"S":0,"M":5,"L":0}; totals must match stock',
     rating        DECIMAL(2,1)    NOT NULL DEFAULT 0.0,
     review_count  INT UNSIGNED    NOT NULL DEFAULT 0,
     is_new        TINYINT(1)      NOT NULL DEFAULT 0,

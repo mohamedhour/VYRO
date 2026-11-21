@@ -363,10 +363,23 @@ app.post('/api/orders/confirm', async (request: Request, response: Response) => 
       }
       const products = new Map<string, any>()
       for (const [productId, quantity] of required) {
-        const [rows] = await connection.execute('SELECT id,name,price_value,stock FROM products WHERE id=? FOR UPDATE', [productId])
+        const [rows] = await connection.execute('SELECT id,name,price_value,stock,stock_by_size FROM products WHERE id=? FOR UPDATE', [productId]) as any
         if (!rows[0]) throw new CheckoutError(`The product "${productId}" is no longer available.`)
         if (Number(rows[0].stock) < quantity) throw new CheckoutError(`"${rows[0].name}" does not have enough stock available.`)
+        const rawStockBySize = rows[0].stock_by_size
+        rows[0].stockBySize = rawStockBySize == null ? null : typeof rawStockBySize === 'string' ? JSON.parse(rawStockBySize) : rawStockBySize
         products.set(productId, rows[0])
+      }
+      const requiredBySize = new Map<string, number>()
+      for (const item of items) {
+        const product = products.get(toText(item.productId))
+        if (!product?.stockBySize) continue
+        const size = toText(item.size)
+        if (!size || !Object.prototype.hasOwnProperty.call(product.stockBySize, size)) throw new CheckoutError(`Choose a valid size for "${product.name}".`)
+        const key = `${product.id}\u0000${size}`
+        const needed = (requiredBySize.get(key) || 0) + Number(item.quantity)
+        requiredBySize.set(key, needed)
+        if (Number(product.stockBySize[size] || 0) < needed) throw new CheckoutError(`"${product.name}" in size ${size} is sold out or does not have enough stock.`)
       }
       let subtotalMad = 0
       const lines = items.map((item: any) => {
@@ -396,7 +409,12 @@ app.post('/api/orders/confirm', async (request: Request, response: Response) => 
       for (const line of lines) {
         await connection.execute('INSERT INTO order_items(order_id,product_id,product_name,size,color,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)',
           [insert.insertId, line.product.id, line.product.name, line.item.size || null, line.item.colorName || line.item.color || null, line.quantity, line.unitPrice, line.quantity * line.unitPrice])
-        await connection.execute('UPDATE products SET stock=stock-? WHERE id=?', [line.quantity, line.product.id])
+        if (line.product.stockBySize) {
+          line.product.stockBySize[line.item.size] -= line.quantity
+          await connection.execute('UPDATE products SET stock=stock-?,stock_by_size=? WHERE id=?', [line.quantity, JSON.stringify(line.product.stockBySize), line.product.id])
+        } else {
+          await connection.execute('UPDATE products SET stock=stock-? WHERE id=?', [line.quantity, line.product.id])
+        }
       }
       if (account && welcomeDiscountMad) account.discountedOrdersUsed += 1
       if (account) store.orders[orderNumber] = { email: account.email, orderNumber, createdAt: Date.now(), subtotalMad, discountMad, totalMad }

@@ -132,10 +132,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
             {selectedSizeStock === 0 ? (
               <p className="rounded-lg border border-rose-500/20 bg-rose-500/[0.07] px-3 py-2 text-xs font-medium text-rose-300">Sold out in {activeSize}</p>
-            ) : hasScarcityBadge ? (
+            ) : hasScarcityBadge && selectedSizeStock > 0 && selectedSizeStock <= 3 ? (
               <p aria-live="polite" className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] px-3.5 py-3 text-xs font-medium text-amber-300">
                 <Flame className="h-4 w-4 shrink-0 animate-pulse text-amber-400" aria-hidden="true" />
-                <span>High Demand: Only 2 left in size {activeSize} for Morocco delivery</span>
+                <span>Low stock: only {selectedSizeStock} left in size {activeSize}</span>
               </p>
             ) : null}
 
@@ -156,8 +156,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       key={size}
                       type="button"
                       onClick={() => setSelectedSize(size)}
-                      disabled={sizeUnavailable}
-                      className={`py-2 text-xs font-mono-tabular font-semibold rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                      aria-pressed={selected}
+                      aria-label={`${size}${sizeUnavailable ? ' — Sold out' : ''}`}
+                      title={sizeUnavailable ? 'Sold out' : undefined}
+                      className={`py-2 text-xs font-mono-tabular font-semibold rounded-lg border transition-colors ${sizeUnavailable ? 'text-zinc-500 line-through opacity-60' : ''} ${
                         selected
                           ? 'bg-rose-600 border-rose-500 text-white'
                           : 'bg-white/[0.04] border-white/10 text-zinc-300 hover:border-white/30'
@@ -252,7 +254,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               className="h-10 w-[4.5rem] shrink-0 rounded-lg border border-white/15 bg-[#0B0E16] px-2 text-center text-xs font-bold text-white focus:border-rose-500 focus:outline-none"
             >
               {product.sizes.map((size) => (
-                <option key={size} value={size} disabled={(product.stockBySize?.[size] ?? product.stock) === 0}>{size}</option>
+                <option key={size} value={size}>{(product.stockBySize?.[size] ?? product.stock) === 0 ? `${size} — Sold out` : size}</option>
               ))}
             </select>
           </div>

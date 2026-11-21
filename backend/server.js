@@ -14,6 +14,28 @@ try { bcrypt = require('bcryptjs'); } catch { bcrypt = null; }
 
 const app = express();
 if (process.env.CLOUDFLARE_WORKER === 'true') app.set('trust proxy', 1);
+// Express 4 does not forward rejected async route handlers to error middleware.
+// Wrap route callbacks so database/network failures produce a response instead
+// of leaving the request open until the Worker runtime cancels it.
+function wrapAsyncRoute(handler) {
+  if (Array.isArray(handler)) return handler.map(wrapAsyncRoute);
+  if (typeof handler !== 'function') return handler;
+  return function wrappedRoute(req, res, next) {
+    try {
+      return Promise.resolve(handler.call(this, req, res, next)).catch(next);
+    } catch (error) {
+      return next(error);
+    }
+  };
+}
+for (const methodName of ['get', 'post', 'put', 'patch', 'delete']) {
+  const registerRoute = app[methodName].bind(app);
+  app[methodName] = (...args) => {
+    // Preserve Express's app.get(setting) getter overload.
+    if (methodName === 'get' && args.length === 1) return registerRoute(...args);
+    return registerRoute(args[0], ...args.slice(1).map(wrapAsyncRoute));
+  };
+}
 const port = Number(process.env.PORT || 8000);
 const secret = process.env.VYRO_SESSION_SECRET;
 const allowedOrigins = (process.env.VYRO_ALLOWED_ORIGINS || 'http://localhost:5173').split(',').map(x => x.trim()).filter(Boolean);
@@ -29,7 +51,13 @@ function edgeDatabaseClient() {
     connectTidb = globalThis.__VYRO_TIDB_CONNECT;
     if (!connectTidb) ({ connect: connectTidb } = require('@tidbcloud/serverless'));
   }
-  const connection = connectTidb({ ...config, fullResult: true });
+  const connection = connectTidb({
+    ...config,
+    fullResult: true,
+    // Fail the database request in a bounded time so the route can return an
+    // error and the Worker can log the underlying network/database failure.
+    fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(15000) }),
+  });
   let transaction;
   async function run(sql, values) {
     const result = await (transaction || connection).execute(sql, values, { fullResult: true });
@@ -180,7 +208,7 @@ function publicProduct(row) {
   const priceValue = Number(row.price_value);
   return { id: row.id, name: row.name, description: row.description, materials: row.materials, category: row.category_name, categorySlug: row.category_slug,
     categoryId: Number(row.category_id), price: `MAD ${priceValue.toLocaleString('en-US')}`, priceValue, image: row.image_url,
-    sizes: parseJson(row.sizes), colors: parseJson(row.colors), stock: Number(row.stock), rating: Number(row.rating), reviewCount: Number(row.review_count), isNew: !!row.is_new };
+    sizes: parseJson(row.sizes), colors: parseJson(row.colors), stock: Number(row.stock), stockBySize: parseJson(row.stock_by_size, null), rating: Number(row.rating), reviewCount: Number(row.review_count), isNew: !!row.is_new };
 }
 async function productById(id) { const [rows] = await pool.execute('SELECT p.*,c.name category_name,c.slug category_slug FROM products p JOIN categories c ON c.id=p.category_id WHERE p.id=? LIMIT 1', [id]); return rows[0] ? publicProduct(rows[0]) : null; }
 app.get('/api/auth/csrf.php', (req, res) => ok(res, { csrfToken: req.vyroSession.csrf }));
@@ -218,9 +246,9 @@ app.post('/api/wishlist/toggle.php',method('POST'),requireUser,async(req,res)=>{
 
 app.post('/api/orders/create.php',method('POST'),requireUser,async(req,res)=>{
  const d=body(req);const errors=requiredFields(d,[['fullName','Full name'],['email','Email'],['phone','Phone'],['address','Address'],['city','City'],['postalCode','Postal code'],['paymentMethod','Payment method']]);if(!errors.email&&!emailValid(d.email))errors.email='Enter a valid email address.';if(!errors.postalCode&&!/^\d{5}$/.test(String(d.postalCode)))errors.postalCode='Enter a valid 5-digit postal code.';if(!errors.paymentMethod&&!['cod','card'].includes(d.paymentMethod))errors.paymentMethod='Choose a valid payment method.';if(Object.keys(errors).length)return fail(res,'Please correct the highlighted fields.',422,errors);if(!Array.isArray(d.items)||!d.items.length)return fail(res,'Your cart is empty.',422);
- const conn=await pool.getConnection();try{await conn.beginTransaction();let subtotal=0;const lines=[];const required=new Map();for(const item of d.items){const qty=Number(item.quantity??1);if(!item.productId||!Number.isInteger(qty)||qty<1)throw new RequestValidationError('Each item needs a valid product and quantity.');required.set(String(item.productId),(required.get(String(item.productId))||0)+qty);}const products=new Map();for(const[id,qty]of required){const[ps]=await conn.execute('SELECT id,name,price_value,stock FROM products WHERE id=? FOR UPDATE',[id]);if(!ps[0])throw new RequestValidationError(`Product "${id}" no longer exists.`);if(Number(ps[0].stock)<qty)throw new RequestValidationError(`"${ps[0].name}" doesn't have enough stock left.`);products.set(id,ps[0]);}for(const item of d.items){const qty=Number(item.quantity??1);const p=products.get(String(item.productId));const price=Number(p.price_value);subtotal+=price*qty;lines.push({p,item,qty,price});}
+ const conn=await pool.getConnection();try{await conn.beginTransaction();let subtotal=0;const lines=[];const required=new Map();for(const item of d.items){const qty=Number(item.quantity??1);if(!item.productId||!Number.isInteger(qty)||qty<1)throw new RequestValidationError('Each item needs a valid product and quantity.');required.set(String(item.productId),(required.get(String(item.productId))||0)+qty);}const products=new Map();for(const[id,qty]of required){const[ps]=await conn.execute('SELECT id,name,price_value,stock,stock_by_size FROM products WHERE id=? FOR UPDATE',[id]);if(!ps[0])throw new RequestValidationError(`Product "${id}" no longer exists.`);if(Number(ps[0].stock)<qty)throw new RequestValidationError(`"${ps[0].name}" doesn't have enough stock left.`);ps[0].stock_by_size=parseJson(ps[0].stock_by_size,null);products.set(id,ps[0]);}const sizeRequired=new Map();for(const item of d.items){const qty=Number(item.quantity??1);const p=products.get(String(item.productId));if(p.stock_by_size){const size=String(item.size||'');if(!size||!Object.prototype.hasOwnProperty.call(p.stock_by_size,size))throw new RequestValidationError(`Choose a valid size for "${p.name}".`);const key=`${p.id}\u0000${size}`;const needed=(sizeRequired.get(key)||0)+qty;sizeRequired.set(key,needed);if(Number(p.stock_by_size[size]||0)<needed)throw new RequestValidationError(`"${p.name}" in size ${size} is sold out or doesn't have enough stock.`);}const price=Number(p.price_value);subtotal+=price*qty;lines.push({p,item,qty,price});}
  const shipping=subtotal>=1500?0:50;const orderNumber='VYRO-'+crypto.randomBytes(5).toString('hex').toUpperCase();const [insert]=await conn.execute('INSERT INTO orders(order_number,user_id,full_name,email,phone,address,city,postal_code,payment_method,subtotal,shipping,total) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',[orderNumber,req.userId,d.fullName,d.email,d.phone,d.address,d.city,d.postalCode,d.paymentMethod,subtotal,shipping,subtotal+shipping]);
- for(const l of lines){await conn.execute('INSERT INTO order_items(order_id,product_id,product_name,size,color,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)',[insert.insertId,l.p.id,l.p.name,l.item.size||null,l.item.color||null,l.qty,l.price,l.qty*l.price]);await conn.execute('UPDATE products SET stock=stock-? WHERE id=?',[l.qty,l.p.id]);}await conn.commit();return ok(res,{order:await getOrder(req.userId,insert.insertId)},201);
+ for(const l of lines){await conn.execute('INSERT INTO order_items(order_id,product_id,product_name,size,color,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)',[insert.insertId,l.p.id,l.p.name,l.item.size||null,l.item.color||null,l.qty,l.price,l.qty*l.price]);if(l.p.stock_by_size){l.p.stock_by_size[l.item.size]-=l.qty;await conn.execute('UPDATE products SET stock=stock-?,stock_by_size=? WHERE id=?',[l.qty,JSON.stringify(l.p.stock_by_size),l.p.id]);}else await conn.execute('UPDATE products SET stock=stock-? WHERE id=?',[l.qty,l.p.id]);}await conn.commit();return ok(res,{order:await getOrder(req.userId,insert.insertId)},201);
  }catch(e){await conn.rollback();if(e instanceof RequestValidationError)return fail(res,e.message,422);throw e;}finally{conn.release();}
 });
 async function getOrder(userId,id){const [o]=await pool.execute('SELECT * FROM orders WHERE id=? AND user_id=?',[id,userId]);if(!o[0])return null;const [items]=await pool.execute('SELECT * FROM order_items WHERE order_id=?',[id]);const r=o[0];return{id:Number(r.id),orderNumber:r.order_number,status:r.status,customer:{fullName:r.full_name,email:r.email,phone:r.phone},address:{address:r.address,city:r.city,postalCode:r.postal_code},paymentMethod:r.payment_method,subtotal:Number(r.subtotal),shipping:Number(r.shipping),total:Number(r.total),placedAt:r.created_at,items:items.map(i=>({productId:i.product_id,name:i.product_name,size:i.size,color:i.color,quantity:Number(i.quantity),unitPrice:Number(i.unit_price),lineTotal:Number(i.line_total)}))};}
@@ -257,6 +285,6 @@ function sniffImage(b){if(b.length<12)return null;if(b[0]===0xff&&b[1]===0xd8&&b
 app.get('/uploads/products/:filename',async(req,res,next)=>{if(process.env.CLOUDFLARE_WORKER!=='true')return next();const filename=path.basename(req.params.filename);if(!/^[a-f0-9]{32}\.(jpg|png|webp)$/.test(filename))return fail(res,'Image not found.',404);const[images]=await pool.execute('SELECT content_type,content FROM app_uploads WHERE object_key=?',[`products/${filename}`]);if(!images[0])return fail(res,'Image not found.',404);res.set({'Content-Type':images[0].content_type,'X-Content-Type-Options':'nosniff','Cache-Control':'public, max-age=31536000, immutable'});return res.send(Buffer.from(images[0].content));});
 if(process.env.CLOUDFLARE_WORKER!=='true')app.use('/uploads/products',express.static(productPhotos,{fallthrough:false, dotfiles:'deny', setHeaders(res){res.setHeader('X-Content-Type-Options','nosniff');}}));
 app.use((req,res)=>fail(res,'Not found.',404));
-app.use((err,req,res,_next)=>{console.error('[VYRO API]',err);if(res.headersSent)return;const status=err instanceof SyntaxError&&'body'in err?400:(Number(err.statusCode||err.status)>=400?Number(err.statusCode||err.status):500);return fail(res,status===400?'Request body must be valid JSON.':(debug?err.message:'Something went wrong. Please try again.'),status);});
+app.use((err,req,res,_next)=>{const status=err instanceof SyntaxError&&'body'in err?400:(Number(err.statusCode||err.status)>=400?Number(err.statusCode||err.status):500);const detail=err?.details?.message||err?.details?.code;console.error(`[VYRO API] ${err?.name||'Error'}: ${err?.message||String(err)}; status=${err?.status||err?.statusCode||status}; code=${err?.code||'n/a'}${detail?`; detail=${detail}`:''}`);if(res.headersSent)return;return fail(res,status===400?'Request body must be valid JSON.':(debug?err.message:'Something went wrong. Please try again.'),status);});
 if (require.main === module) app.listen(port, '0.0.0.0',()=>console.log(`VYRO Node API listening on port ${port}`));
 module.exports = app;

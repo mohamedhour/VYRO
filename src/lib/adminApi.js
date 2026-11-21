@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || window.location.origin
+import { API_BASE } from './apiBase'
 
 /**
  * Every admin request goes through here. Session auth relies on the
