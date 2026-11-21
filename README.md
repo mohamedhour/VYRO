@@ -2,11 +2,15 @@
 
 VYRO is a React/Vite storefront with an Express API for customer accounts, orders, promotions, try-on, and the AI stylist. The Node/MySQL catalog and admin API lives in `backend/`.
 
-## Public preview
+## Open the store
 
-The storefront preview is deployed to GitHub Pages at <https://mohamedhour.github.io/vyro-fashion/>. It uses the sample catalog bundled with the frontend. Accounts, checkout, order tracking, the AI stylist, and the Node APIs are not connected in this static preview.
+**Live full-stack store:** <https://vyro-fashion.hoursimo69.workers.dev>
 
-The `.github/workflows/pages.yml` workflow publishes a static preview. Accounts, checkout, order tracking, AI features, and Node APIs need the full-stack deployment below.
+The store, API, and database run on Cloudflare and TiDB, so customers can browse and place orders even when the development computer is off.
+
+**GitHub Pages preview:** <https://mohamedhour.github.io/VYRO/>
+
+The Pages link is a static demo using the sample catalog; checkout, accounts, tracking, the AI stylist, and database-backed APIs work on the full-stack store link above.
 
 ## Run locally
 
