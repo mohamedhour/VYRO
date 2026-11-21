@@ -19,6 +19,7 @@ data/promo-hour-claims.json*
 data/customer-accounts.json*
 .codex/
 archive/
+publish-sync/
 
 # Editor directories and files
 .vscode/*
