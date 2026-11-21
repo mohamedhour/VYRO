@@ -2,9 +2,9 @@ import 'dotenv/config'
 import express, { type Request, type Response } from 'express'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { GoogleGenAI } from '@google/genai'
+import legacyApi from './backend/server.js'
 
 const app = express()
 if (process.env.CLOUDFLARE_WORKER === 'true') app.set('trust proxy', 1)
@@ -624,8 +624,6 @@ app.post('/api/chat', async (request: Request, response: Response) => {
 
 if (process.env.NODE_ENV === 'production' && process.env.CLOUDFLARE_WORKER !== 'true') {
   const distDirectory = path.resolve(process.cwd(), 'dist')
-  const require = createRequire(import.meta.url)
-  const legacyApi = require('./backend/server.js')
 
   app.use(express.static(distDirectory))
   app.get('*', (request, response, next) => {
@@ -636,8 +634,6 @@ if (process.env.NODE_ENV === 'production' && process.env.CLOUDFLARE_WORKER !== '
 } else if (process.env.CLOUDFLARE_WORKER === 'true') {
   // Cloudflare serves the Vite build through its Assets binding. Keep the
   // Express API mounted here so browser and API share one public origin.
-  const require = createRequire(import.meta.url)
-  const legacyApi = require('./backend/server.js')
   app.use(legacyApi)
 }
 
